@@ -16,6 +16,11 @@ class Simulation:
         self.alerts=[]
         self.cancel=[]
 
+
+        self._event_queue=[]
+        self.counter=itertools.count()
+        self.active_alerts=set()
+
     def load(self,p:Path):
 
         with p.open() as file:
@@ -64,12 +69,26 @@ def run(self):
     print('\n---Simulation Start---')
     while self._event_quene:
         time,_,event_type,data=heapq.heappop(self._event_quene)
+        if time>self.len:
+            break
         if event_type=='ALERT':
             dev,msg=data
+            if(dev,msg)in self.active_alerts:
+                continue
+            self.active_alerts.add((dev,msg))
             print(f"[t={time}] ALERT from device{dev}:'{msg}'")
+            for(src,dest), delay in self.propagation.items():
+                if src==dev:
+                    new_time=time+delay
+                    self.schedule_event(new_time,'ALERT',(dest,msg))
+
         elif event_type=='CANCEL':
             dev,msg=data
             print(f"[t={time}] CANCEL on device{dev}:'{msg}'")
+
+            if(dev,msg) in self.active_alerts:
+                self.active_alerts.remove((dev,msg))
+
     print('---Simulation End')
 
 
