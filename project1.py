@@ -1,102 +1,107 @@
 from pathlib import Path
-import  heapq
+import heapq
 import itertools
-import sys
 
 
 def _read_input_file_path() -> Path:
     """Reads the input file path from the standard input"""
     return Path(input())
 
+
 class Simulation:
     def __init__(self):
-        self.len=0
-        self.devi=set()
-        self.propagations={}
-        self.alerts=[]
-        self.cancel=[]
+        self.len = 0
+        self.devi = set()
+        self.propagations = {}
+        self.alerts = []
+        self.cancel = []
+        self._event_queue = []
+        self.counter = itertools.count()
+        self.received_alerts = set()
+        self.received_cancels = set()
 
-
-        self._event_queue=[]
-        self.counter=itertools.count()
-        self.active_alerts=set()
-
-    def load(self,p:Path):
+    def load(self, p: Path):
 
         with p.open() as file:
             for line in file:
-                line=line.strip()
+                line = line.strip()
                 if not line or line.startswith('#'):
                     continue
 
-                parts=line.split()
-                cmd=parts[0].upper()
+                parts = line.split()
+                cmd = parts[0].upper()
 
-                if cmd=='LENGTH':
-                    self.len=int(parts[1])
-                elif cmd=='DEVICE':
+                if cmd == 'LENGTH':
+                    self.len = int(parts[1])
+                elif cmd == 'DEVICE':
                     self.devi.add(int(parts[1]))
-                elif cmd=='PROPAGATE':
-                    w,h,y=map(int,parts[1:])
-                    self.propagations[(w,h)]=y
-                elif cmd=="ALERT":
-                    dev,msg,time=int(parts[1]),parts[2],int(parts[3])
-                    self.alerts.append((dev,msg,time))
-                elif cmd=='CANCEL':
-                    dev,msg,time=int(parts[1]),parts[2],int(parts[3])
-                    self.cancel.append((dev,msg,time))
-                else:
-                    raise ValueError(f"Unknown command: {cmd}")
+                elif cmd == 'PROPAGATE':
+                    w, h, y = map(int, parts[1:])
+                    self.propagations.setdefault(w, []).append((h, y))
+                elif cmd == "ALERT":
+                    dev, msg, time = int(parts[1]), parts[2], int(parts[3])
+                    self.alerts.append((dev, msg, time))
+                elif cmd == 'CANCEL':
+                    dev, msg, time = int(parts[1]), parts[2], int(parts[3])
+                    self.cancel.append((dev, msg, time))
 
-        print(f"Simulation length: {self.len}")
-        print(f"Devices: {self.devi}")
-        print(f"Propagations: {self.propagations}")
-        print(f"Alerts: {self.alerts}")
-        print(f"Cancellations: {self.cancel}")
+    def sched_event(self, time: int, event_type: str, data):
+        if time > self.len:
+            return
+        count = next(self.counter)
+        heapq.heappush(self._event_queue, (time, count, event_type, data))
 
-def sched_event(self,time:int,event_type:str,data):
-    if time>self.len:
-        return
-    count=next(self.counter)
-    heapq.heappush(self._event_queue,(time,count,event_type,data))
+    def run(self):
+        for dev, msg, t in self.alerts:
+            self.sched_event(t, 'ALERT_SEND', (dev, msg))
+        for dev, msg, t in self.cancel:
+            self.sched_event(t, 'CANCEL_SEND', (dev, msg))
 
-def run(self):
-    for dev,msg,t in self.alert:
-        self.sched_event(t,'ALERT',(dev,msg))
-    for dev,msg,t in self.cancel:
-        self.sched_event(t,'CANCEL',(dev,msg))
+        while self._event_quene:
+            time, _, event_type, data = heapq.heappop(self._event_quene)
+            if time > self.len:
+                break
 
-    print('\n---Simulation Start---')
-    while self._event_quene:
-        time,_,event_type,data=heapq.heappop(self._event_quene)
-        if time>self.len:
-            break
-        if event_type=='ALERT':
-            dev,msg=data
-            if(dev,msg)in self.active_alerts:
-                continue
-            self.active_alerts.add((dev,msg))
-            print(f"[t={time}] ALERT from device{dev}:'{msg}'")
-            for(src,dest), delay in self.propagation.items():
-                if src==dev:
-                    new_time=time+delay
-                    self.schedule_event(new_time,'ALERT',(dest,msg))
+            if event_type == 'ALERT_SEND':
+                dev, msg = data
+                for dest, delay in self.propagations.get(dev, []):
+                    print(f"@{time}:#{dev} SENT ALERT TO #{dest}:{msg}")
+                    recv_time = time + delay
+                    self.sched_event(recv_time, "ALERT_RECV", (dest, src, msg))
 
-        elif event_type=='CANCEL':
-            dev,msg=data
-            print(f"[t={time}] CANCEL on device{dev}:'{msg}'")
+            elif event_type == 'ALERT_RECV':
+                dest,src,msg = data
+                if (dest,msg) in self.received_alerts:
+                    continue
+                self.received_alerts.add((dest, msg))
+                print(f"@{time}:#{dest} RECEIVED ALERT FROM #{src}:{msg}")
+                for next_dest, delay in self.propagations.get(dest, []):
+                    recv_time = time+delay
+                    self.sched_event(recv_time,"ALERT_RECV",(next_dest,dest,msg))
 
-            if(dev,msg) in self.active_alerts:
-                self.active_alerts.remove((dev,msg))
+            elif event_type=='CANCEL_SEND':
+                src,msg=data
+                for dest,delay in self.propagations.get(src,[]):
+                    print(f"@{time}:#{src} SENT CANCELLATION TO #{dest}:{msg}")
+                    recv_time=time+delay
+                    self.schedule_event(recv_time,"CANCEL_RECV",(dest,src,msg))
 
-    print('---Simulation End')
+            elif event_type == "CANCEL_RECV":
+                dest, src, msg = data
+                if (dest, msg) in self.received_cancels:
+                    continue
+                self.received_cancels.add((dest, msg))
+            print(f"@{time}:#{dest} RECEIVED CANCELLATION FROM #{src}:{msg}")
+            for next_dest, delay in self.propagations.get(dest, []):
+                self.sched_event(time, "CANCEL_SEND", (dest, msg))
 
+            print(f"@{self.len}: END")
 
 
 def main() -> None:
     """Runs the simulation program in its entirety"""
     input_file_path = _read_input_file_path()
-    sim=Simulation()
+    sim = Simulation()
     sim.load(input_file_path)
     sim.run()
 
