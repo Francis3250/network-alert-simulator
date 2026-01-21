@@ -57,45 +57,48 @@ class Simulation:
         for dev, msg, t in self.cancel:
             self.sched_event(t, 'CANCEL_SEND', (dev, msg))
 
-        while self._event_quene:
-            time, _, event_type, data = heapq.heappop(self._event_quene)
-            if time > self.len:
-                break
-
+        while self._event_queue:
+            time, _, event_type, data = heapq.heappop(self._event_queue)
             if event_type == 'ALERT_SEND':
                 dev, msg = data
+                if (dev,msg) in self.received_cancels:
+                    continue
                 for dest, delay in self.propagations.get(dev, []):
-                    print(f"@{time}:#{dev} SENT ALERT TO #{dest}:{msg}")
+                    print(f"@{time}: #{dev} SENT ALERT TO #{dest}: {msg}")
                     recv_time = time + delay
-                    self.sched_event(recv_time, "ALERT_RECV", (dest, src, msg))
+                    self.sched_event(recv_time, "ALERT_RECV", (dest, dev, msg))
 
             elif event_type == 'ALERT_RECV':
                 dest,src,msg = data
-                if (dest,msg) in self.received_alerts:
-                    continue
                 self.received_alerts.add((dest, msg))
-                print(f"@{time}:#{dest} RECEIVED ALERT FROM #{src}:{msg}")
+                print(f"@{time}: #{dest} RECEIVED ALERT FROM #{src}: {msg}")
                 for next_dest, delay in self.propagations.get(dest, []):
+                    if (dest, msg) in self.received_cancels:
+                        continue
                     recv_time = time+delay
                     self.sched_event(recv_time,"ALERT_RECV",(next_dest,dest,msg))
+                    print(f"@{time}: #{dest} SENT ALERT TO #{next_dest}: {msg}")
 
             elif event_type=='CANCEL_SEND':
                 src,msg=data
+                self.received_cancels.add((src, msg))
                 for dest,delay in self.propagations.get(src,[]):
-                    print(f"@{time}:#{src} SENT CANCELLATION TO #{dest}:{msg}")
+                    print(f"@{time}: #{src} SENT CANCELLATION TO #{dest}: {msg}")
                     recv_time=time+delay
-                    self.schedule_event(recv_time,"CANCEL_RECV",(dest,src,msg))
+                    self.sched_event(recv_time,"CANCEL_RECV",(dest,src,msg))
 
             elif event_type == "CANCEL_RECV":
                 dest, src, msg = data
+                print(f"@{time}: #{dest} RECEIVED CANCELLATION FROM #{src}: {msg}")
                 if (dest, msg) in self.received_cancels:
                     continue
                 self.received_cancels.add((dest, msg))
-            print(f"@{time}:#{dest} RECEIVED CANCELLATION FROM #{src}:{msg}")
-            for next_dest, delay in self.propagations.get(dest, []):
-                self.sched_event(time, "CANCEL_SEND", (dest, msg))
+                for next_dest, delay in self.propagations.get(dest, []):
+                    recv_time = time + delay
+                    self.sched_event(recv_time, "CANCEL_RECV", (next_dest,dest, msg))
+                    print(f"@{time}: #{dest} SENT CANCELLATION TO #{next_dest}: {msg}")
 
-            print(f"@{self.len}: END")
+        print(f"@{self.len}: END")
 
 
 def main() -> None:
