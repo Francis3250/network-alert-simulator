@@ -33,7 +33,7 @@ _BUNDLE_NAME = 'project1.bundle'
 
 # This is the version of Python that you should be running, expressed as a
 # two-element tuple.
-_REQUIRED_PYTHON_VERSION = ('3', '14')
+_REQUIRED_PYTHON_VERSION = ('3', '13')
 
 
 

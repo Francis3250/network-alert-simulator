@@ -13,7 +13,7 @@
 # In order for the sanity check to run successfully, you'll need to meet
 # these requirements:
 #
-# * You're running the correct version of Python (3.14)
+# * You're running the correct version of Python (3.13)
 # * This module is in the project directory alongside "project1.py" and
 #   whatever additional modules comprise your solution.
 # * It's possible to run the program by executing that "project1.py" module.
@@ -43,7 +43,7 @@ import traceback
 
 
 
-_REQUIRED_PYTHON_VERSION = ('3', '14')
+_REQUIRED_PYTHON_VERSION = ('3', '13')
 
 
 
