@@ -18,7 +18,7 @@ Devices forward alerts to their neighbors with a fixed propagation delay. A canc
 ```bash
 python project1.py
 # then enter the path to a scenario file, e.g. samples/sample_input.txt
-python -m unittest discover tests
+python -m unittest discover tests   # all tests passing
 ```
 
 `samples/` holds an example scenario and its expected output.
